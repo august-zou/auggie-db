@@ -4,9 +4,37 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"unicode/utf8"
 )
 
+type MetaCommandResult int
+
+const (
+	META_COMMAND_SUCCESS = iota
+	META_COMMAND_UNRECOGNIZED_COMMAND
+)
+
+type PrepareResult int
+
+const (
+	PREPARE_SUCCESS = iota
+	PREPARE_UNRECOGNIZED_STATEMENT
+)
+
+type StatementType int
+
+const (
+	STATEMENT_INSERT = iota
+	STATEMENT_SELECT
+)
+
+type Statement struct {
+	sType StatementType
+}
+
+//InputBuffer store input buffer
 type InputBuffer struct {
 	buffer string
 	length int
@@ -47,7 +75,39 @@ func SubString(str string, begin, length int) (substr string) {
 	return string(rs[begin:end])
 }
 
+func exitFunc() {
+	fmt.Println("bye...")
+	os.Exit(0)
+}
+
+//find the statement
+func prepareStatement(input *InputBuffer, statement *Statement) PrepareResult {
+	if input.buffer == "insert" {
+		statement.sType = STATEMENT_INSERT
+		return PREPARE_SUCCESS
+	}
+	if input.buffer == "select" {
+		statement.sType = STATEMENT_SELECT
+		return PREPARE_SUCCESS
+	}
+	return PREPARE_UNRECOGNIZED_STATEMENT
+}
 func main() {
+
+	// listen os signal ctrl+c kill
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		for s := range c {
+			switch s {
+			case syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
+				fmt.Println(s)
+				exitFunc()
+			default:
+				fmt.Println("other", s)
+			}
+		}
+	}()
 
 	var inputReader *bufio.Reader = bufio.NewReader(os.Stdin)
 
@@ -55,11 +115,23 @@ func main() {
 		printPrompt()
 		input := readInput(inputReader)
 		if input.buffer == ".exit" {
-			fmt.Println("bye.")
-			return
+			exitFunc()
 		}
 		if input.buffer != "" {
-			fmt.Printf("Unrecognized command '%s'.\n", input.buffer)
+			if input.buffer[0] == '.' {
+				fmt.Printf("this is meta command '%s'.\n", input.buffer)
+				continue
+			}
+
+			var statement *Statement = new(Statement)
+			switch prepareStatement(input, statement) {
+			case PREPARE_SUCCESS:
+				fmt.Printf("statement type %d'.\n", statement.sType)
+				break
+			case PREPARE_UNRECOGNIZED_STATEMENT:
+				fmt.Printf("Unrecognized keyword at start of '%s'.\n", input.buffer)
+			}
+			// fmt.Printf("Unrecognized command '%s'.\n", input.buffer)
 
 		}
 	}
