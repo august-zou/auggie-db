@@ -92,6 +92,14 @@ func prepareStatement(input *InputBuffer, statement *Statement) PrepareResult {
 	}
 	return PREPARE_UNRECOGNIZED_STATEMENT
 }
+
+func doMetaCommand(input *InputBuffer) MetaCommandResult {
+	if input.buffer == ".exit" {
+		exitFunc()
+	}
+	return META_COMMAND_UNRECOGNIZED_COMMAND
+
+}
 func main() {
 
 	// listen os signal ctrl+c kill
@@ -114,25 +122,30 @@ func main() {
 	for {
 		printPrompt()
 		input := readInput(inputReader)
-		if input.buffer == ".exit" {
-			exitFunc()
+		if input.buffer == "" {
+			continue
 		}
-		if input.buffer != "" {
-			if input.buffer[0] == '.' {
+
+		if input.buffer[0] == '.' {
+			switch doMetaCommand(input) {
+			case META_COMMAND_SUCCESS:
+				continue
+			case META_COMMAND_UNRECOGNIZED_COMMAND:
 				fmt.Printf("this is meta command '%s'.\n", input.buffer)
 				continue
 			}
-
-			var statement *Statement = new(Statement)
-			switch prepareStatement(input, statement) {
-			case PREPARE_SUCCESS:
-				fmt.Printf("statement type %d'.\n", statement.sType)
-				break
-			case PREPARE_UNRECOGNIZED_STATEMENT:
-				fmt.Printf("Unrecognized keyword at start of '%s'.\n", input.buffer)
-			}
-			// fmt.Printf("Unrecognized command '%s'.\n", input.buffer)
-
 		}
+
+		var statement Statement
+
+		switch prepareStatement(input, &statement) {
+		case PREPARE_SUCCESS:
+			fmt.Printf("statement type %d'.\n", statement.sType)
+			break
+		case PREPARE_UNRECOGNIZED_STATEMENT:
+			fmt.Printf("Unrecognized keyword at start of '%s'.\n", input.buffer)
+		}
+		// fmt.Printf("Unrecognized command '%s'.\n", input.buffer)
+
 	}
 }
